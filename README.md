@@ -29,10 +29,18 @@ cp .env.example .env
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string (`?sslmode=require` for Neon). |
-| `AUTH_SECRET` | Secret for signing sessions. Use a long random value in production (`openssl rand -base64 32`). |
-| `NEXTAUTH_URL` | Public URL of the app (e.g. `http://localhost:3000` locally, your domain in prod). |
+| `DATABASE_URL` | PostgreSQL connection string (`?sslmode=require` for Neon). Use the **pooled** Neon URL for serverless. |
+| `AUTH_SECRET` | Secret for signing sessions (`openssl rand -base64 32`). Changing it **logs everyone out** but does **not** stop new logins if the new value is set correctly on the server. |
+| `AUTH_URL` | **Important on Vercel:** canonical public URL, e.g. `https://your-app.vercel.app` (no trailing slash). Auth.js v5 uses this for cookies/CSRF. |
+| `NEXTAUTH_URL` | Same as `AUTH_URL` if you use older docs; set both to the same value in production. |
 | `NEXT_PUBLIC_SITE_URL` | Optional. Used for `metadataBase` / Open Graph. On Vercel, `VERCEL_URL` is used if this is unset. |
+
+### Login fails on Vercel?
+
+1. **`AUTH_URL`** — Must be the exact HTTPS URL users open (production domain or `*.vercel.app`). Wrong URL → cookies/session break.
+2. **`AUTH_SECRET`** — Must be set and non-empty. Wrong/empty → `AuthError` (not “wrong password”).
+3. **`DATABASE_URL`** — If Prisma cannot connect, `authorize` throws → sign-in fails even with correct password. Check Vercel **Functions** logs.
+4. **Seeded users** — Production DB must have accounts (`npx prisma db seed` against prod, or your own data). Demo password after seed: `Welcome1!`.
 
 ### 3. Database schema
 
@@ -90,7 +98,7 @@ Set the same env vars on your host. Run migrations/push and seed (or migrate) ag
 
 ## Deploy (e.g. Vercel)
 
-1. Connect the repo and set `DATABASE_URL`, `AUTH_SECRET`, `NEXTAUTH_URL` (your production URL), and optionally `NEXT_PUBLIC_SITE_URL`.
+1. Connect the repo and set **`DATABASE_URL`**, **`AUTH_SECRET`**, **`AUTH_URL`** (and `NEXTAUTH_URL` to the same value), optionally `NEXT_PUBLIC_SITE_URL`.
 2. Build command: `npm run build` (default).
 3. After first deploy, run `npx prisma db push` (or your migration workflow) against the production database, then seed if you want demo data.
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { AuthError } from "next-auth";
 import { prisma } from "./prisma";
 import { auth } from "./auth";
 import { headers } from "next/headers";
@@ -623,11 +624,29 @@ export async function loginAction(formData: FormData): Promise<ActionResult> {
     });
     const res = result as { ok?: boolean; error?: string | null } | void;
     if (res != null && typeof res === "object" && res.ok === false) {
-      return { ok: false, error: res.error?.trim() || "Could not sign you in." };
+      return {
+        ok: false,
+        error: res.error?.trim() || "Invalid user ID, email, or password.",
+      };
     }
     return { ok: true, redirectTo: "/dashboard", message: "Signed in successfully." };
-  } catch {
-    return { ok: false, error: "Could not sign you in. Please try again." };
+  } catch (e) {
+    if (e instanceof AuthError) {
+      if (e.type === "CredentialsSignin") {
+        return { ok: false, error: "Invalid user ID, email, or password." };
+      }
+      return {
+        ok: false,
+        error:
+          "Server auth misconfiguration. On Vercel set AUTH_SECRET and AUTH_URL (https://your-app.vercel.app).",
+      };
+    }
+    console.error("[loginAction]", e);
+    return {
+      ok: false,
+      error:
+        "Sign-in failed (often a database error on the server). Check Vercel logs and DATABASE_URL.",
+    };
   }
 }
 
