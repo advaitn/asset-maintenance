@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  Worker
+  Manager
+  Technician
+}
+
+enum TaskStatus {
+  Reported
+  Assigned
+  InProgress
+  MaterialRequested
+  MaterialApproved
+  Completed
+  Confirmed
+  Cancelled
+}
+
+enum TaskPriority {
+  Low
+  Medium
+  High
+  Critical
+}
+
+enum AssetType {
+  Pump
+  Motor
+  Conveyor
+  Compressor
+  HVAC
+  Electrical
+}
+
+enum MaterialRequestStatus {
+  Pending
+  Approved
+  Rejected
+}
+
+model Department {
+  id       Int     @id @default(autoincrement())
+  name     String  @unique
+  isActive Boolean @default(true)
+  assets   Asset[]
+
+  @@map("departments")
+}
+
+model Asset {
+  id           Int      @id @default(autoincrement())
+  name         String
+  location     String   @default("")
+  assetType    AssetType
+  departmentId Int
+  isActive     Boolean  @default(true)
+
+  department Department        @relation(fields: [departmentId], references: [id])
+  tasks      MaintenanceTask[]
+
+  @@map("assets")
+}
+
+model Account {
+  id            String    @id
+  fullName      String
+  email         String    @unique
+  passwordHash  String
+  role          UserRole
+  isActive      Boolean   @default(true)
+  lastLoginDate DateTime?
+
+  reportedTasks     MaintenanceTask[] @relation("ReportedBy")
+  assignedTasks     MaintenanceTask[] @relation("AssignedTo")
+  createdTasks      MaintenanceTask[] @relation("CreatedBy")
+  modifiedTasks     MaintenanceTask[] @relation("LastModifiedBy")
+  createdMaterials  MaterialRequest[] @relation("MRCreatedBy")
+  modifiedMaterials MaterialRequest[] @relation("MRLastModifiedBy")
+  historyChanges    TaskHistory[]     @relation("ChangedBy")
+
+  @@map("accounts")
+}
+
+model MaintenanceTask {
+  id                     Int          @id @default(autoincrement())
+  taskCode               String       @unique
+  title                  String
+  description            String       @default("")
+  status                 TaskStatus   @default(Reported)
+  priority               TaskPriority @default(Medium)
+  assetId                Int
+  reportedById           String
+  assignedToId           String?
+  createdById            String
+  lastModifiedById       String
+  createdDate            DateTime     @default(now())
+  completedDate          DateTime?
+  lastModifiedDate       DateTime     @default(now())
+  rejectionReason        String       @default("")
+  reworkCount            Int          @default(0)
+  versionNumber          Int          @default(1)
+  lastModifiedClientIp   String       @default("")
+  lastModifiedUserAgent  String       @default("")
+
+  asset            Asset             @relation(fields: [assetId], references: [id])
+  reportedBy       Account           @relation("ReportedBy", fields: [reportedById], references: [id])
+  assignedTo       Account?          @relation("AssignedTo", fields: [assignedToId], references: [id])
+  createdBy        Account           @relation("CreatedBy", fields: [createdById], references: [id])
+  lastModifiedBy   Account           @relation("LastModifiedBy", fields: [lastModifiedById], references: [id])
+  materialRequests MaterialRequest[]
+  history          TaskHistory[]
+
+  @@index([status])
+  @@index([reportedById])
+  @@index([assignedToId])
+  @@map("maintenance_tasks")
+}
+
+model MaterialRequest {
+  id                    Int                   @id @default(autoincrement())
+  taskId                Int
+  description           String
+  quantity              String                @default("1")
+  requestStatus         MaterialRequestStatus @default(Pending)
+  requestedDate         DateTime              @default(now())
+  resolvedDate          DateTime?
+  managerNotes          String                @default("")
+  createdById           String?
+  lastModifiedById      String?
+  createdDate           DateTime              @default(now())
+  lastModifiedDate      DateTime              @default(now())
+  lastModifiedClientIp  String                @default("")
+
+  task           MaintenanceTask @relation(fields: [taskId], references: [id])
+  createdBy      Account?        @relation("MRCreatedBy", fields: [createdById], references: [id])
+  lastModifiedBy Account?        @relation("MRLastModifiedBy", fields: [lastModifiedById], references: [id])
+
+  @@map("material_requests")
+}
+
+model TaskHistory {
+  id              Int      @id @default(autoincrement())
+  taskId          Int
+  timestamp       DateTime @default(now())
+  oldStatus       String   @default("—")
+  newStatus       String
+  changedById     String
+  comment         String   @default("")
+  clientIp        String   @default("")
+  userEnvironment String   @default("")
+  correlationId   String   @default("")
+
+  task      MaintenanceTask @relation(fields: [taskId], references: [id])
+  changedBy Account         @relation("ChangedBy", fields: [changedById], references: [id])
+
+  @@index([taskId])
+  @@map("task_history")
+}
+
+model TaskCounter {
+  id         Int @id @default(autoincrement())
+  lastNumber Int @default(0)
+
+  @@map("task_counter")
+}
